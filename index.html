@@ -103,6 +103,8 @@
         <br>
         Breakpoint in raids reached: {{RaidCounter.breakpoint}} / {{RaidCounter.raids}}<br>
         Breakpoint in raids with se-damage reached: {{RaidCounter.breakpoint_se}} / {{RaidCounter.raids_se}}<br>
+        Breakpoint in raids with weatherboost reached: {{RaidCounter.breakpoint_wb}} / {{RaidCounter.raids_wb}}<br>
+        Breakpoint in raids with weatherboost and se-damage reached: {{RaidCounter.breakpoint_se_wb}} / {{RaidCounter.raids_se_wb}}<br>
       </span><br>
       <table border="1" v-if="RaidResults.length > 0">
         <tr>
@@ -111,6 +113,9 @@
           <th>Damage</th>
           <th>Damage_15IV</th>
           <th>Last breakpoint?</th>
+          <th>Damage WB</th>
+          <th>Damage_15IV Wb</th>
+          <th>Last breakpoint with WB?</th>
         </tr>
         <tr v-for="raid in RaidResults">
           <td>{{raid.name}} </td>
@@ -118,6 +123,9 @@
           <td>{{raid.damage}}</td>
           <td>{{raid.damage_15}}</td>
           <td>{{raid.breakpoint}}</td>
+          <td>{{raid.damage_wb}}</td>
+          <td>{{raid.damage_15_wb}}</td>
+          <td>{{raid.breakpoint_wb}}</td>
         </tr>
       </table>
       <span>
@@ -139,7 +147,7 @@
     PokeWeather: pokemon_weather,
     PokeCPM: pokemon_cpm,
     PokeTypes: pokemon_types,
-    PokeRaid: pokemon_raidbosses["previous"],
+    PokeRaid: pokemon_raidbosses,
     PokeFastMoves: pokemon_fastmoves,
     PokeTE: pokemon_te,
 		SelectedPokemon: 0,
@@ -156,20 +164,22 @@
     STAB: 1,
     Megabonus: 1,
     RaidResults: [],
-    RaidCounter: {"raids": 0, "breakpoint": 0, "raids_se": 0, "breakpoint_se": 0}
+    RaidCounter: {"raids": 0, "breakpoint": 0, "raids_se": 0, "breakpoint_se": 0, "raids_wb": 0, "breakpoint_wb": 0, "raids_se_wb": 0, "breakpoint_se_wb": 0}
     },
     methods: {
       CalculateRaids : function(){
         this.RaidResults = []
-        this.RaidCounter = {"raids": 0, "breakpoint": 0, "raids_se": 0, "breakpoint_se": 0}
+        this.RaidCounter = {"raids": 0, "breakpoint": 0, "raids_se": 0, "breakpoint_se": 0, "raids_wb": 0, "breakpoint_wb": 0, "raids_se_wb": 0, "breakpoint_se_wb": 0}
         var cpm = this.PokeCPM.filter(cpm => cpm.level == this.MaxLevel)[0].multiplier
         var fixed_multi = 1/2 * this.SelectedFastMove.power * this.SelectedFriendship * this.STAB * this.ShadowAttackbonus * this.Megabonus
         var atk_iv_stat = cpm * (this.SelectedPokemonStats.base_attack + this.AttackIV)
         var atk_15_stat = cpm * (this.SelectedPokemonStats.base_attack + 15)
 
-        for(key in this.PokeRaid[5]){
+        var raids = this.PokeRaid["previous"][5].concat(this.PokeRaid["current"][5])
+
+        for(key in raids){
           var cpmr = 0.79
-          var raidboss = this.PokeRaid[5][key]
+          var raidboss = raids[key]
           var def = cpmr * (15 + this.PokeStats.filter(pokemon => pokemon.pokemon_id == raidboss.id && pokemon.form == raidboss.form)[0].base_defense)
           var se = 1.0
           for(i in raidboss.type){
@@ -178,6 +188,8 @@
 
           var damage_iv = 1 + Math.floor(fixed_multi * atk_iv_stat * se / def)
           var damage_15 = 1 + Math.floor(fixed_multi * atk_15_stat * se / def)
+          var damage_iv_wb = 1 + Math.floor(fixed_multi * atk_iv_stat * 1.2 * se / def)
+          var damage_15_wb = 1 + Math.floor(fixed_multi * atk_15_stat * 1.2 * se / def)
 
           this.RaidCounter.raids += 1
           if(damage_iv == damage_15)
@@ -188,8 +200,17 @@
               this.RaidCounter.breakpoint_se += 1
           }
 
+          this.RaidCounter.raids_wb += 1
+          if(damage_iv_wb == damage_15_wb)
+            this.RaidCounter.breakpoint_wb += 1
+          if(se > 1){
+            this.RaidCounter.raids_se_wb += 1
+            if(damage_iv_wb == damage_15_wb)
+              this.RaidCounter.breakpoint_se_wb += 1
+          }
 
-          var result = {"name" : raidboss.name, "form" : raidboss.form, "damage" : damage_iv, "damage_15": damage_15, "breakpoint" : damage_iv == damage_15}
+
+          var result = {"name" : raidboss.name, "form" : raidboss.form, "damage" : damage_iv, "damage_15": damage_15, "breakpoint" : damage_iv == damage_15, "damage_wb" : damage_iv_wb, "damage_15_wb": damage_15_wb, "breakpoint_wb" : damage_iv_wb == damage_15_wb}
           this.RaidResults.push(result)
         }
       }
