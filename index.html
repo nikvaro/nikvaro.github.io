@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="en_UK">
+<html>
+  <head>
+	  <title>
+		  PokemonGo Breakpoint Calculator
+	  </title>
+    <script src="https://unpkg.com/vue@latest"></script>
+    <script src="https://unpkg.com/vue-select@latest"></script>
+    <link rel="stylesheet" href="https://unpkg.com/vue-select@3.0.0/dist/vue-select.css">
+    <script src="data/pokemon_stats.js"></script>
+    <script src="data/pokemon_names.js"></script>
+    <script src="data/current_pokemon_moves.js"></script>
+    <script src="data/friendship_level_settings.js"></script>
+    <script src="data/pokemon_types.js"></script>
+    <script src="data/type_effectiveness.js"></script>
+    <script src="data/weather_boosts.js"></script>
+    <script src="data/cp_multiplier.js"></script>
+    <script src="data/raid_bosses.js"></script>
+    <script src="data/fast_moves.js"></script>
+  </head>
+
+  <body>
+    <div id="app">
+
+      <v-select label="name" v-model="SelectedPokemon" :options="Pokemons">
+      </v-select>
+      <br>
+      <select
+        v-model="SelectedForm"
+        v-if="SelectedPokemon != 0">
+        <option
+          v-for="form in PokeStats.filter(pokemon => pokemon.pokemon_id == SelectedPokemon.id)"
+          v-bind:value="form.form">
+          {{ form.form}}
+        </option>
+      </select>
+      <select
+        v-model="SelectedMove"
+        v-if="SelectedPokemon != 0 && SelectedForm != 0">
+        <option
+          v-for="move in 
+          PokeMoves.filter(
+            pokemon => pokemon.pokemon_id == SelectedPokemon.id
+            && pokemon.form == SelectedForm
+          )[0].fast_moves.concat(PokeMoves.filter(
+            pokemon => pokemon.pokemon_id == SelectedPokemon.id
+            && pokemon.form == SelectedForm
+          )[0].elite_fast_moves)"
+          v-bind:value="move">
+          {{ move}}
+        </option>
+      </select>
+
+      <select v-model="AttackIV">
+        <option
+          v-for="iv in [...Array(15).keys()].map(i => i+1)" v-bind:value="iv">
+          {{ iv }}
+        </option>
+      </select>
+
+      <select v-model="SelectedFriendship">
+        <option
+        v-for="fs in PokeFS" v-bind:value="fs.attack_bonus">
+          {{ fs.name }}
+        </option>
+      </select>
+
+      <select v-model="MaxLevel">
+        <option
+        v-for="level in Levels" v-bind:value="level">
+          {{ level }}
+        </option>
+      </select>
+
+      <select v-model="Weather" hidden>
+        <option
+        v-for="weather in PokeWeather" v-bind:value="weather">
+          {{ weather.weather }}
+        </option>
+      </select>
+
+      <select v-model="Megabonus">
+        <option value="1">No mega</option>
+        <option value="1.1">Mega</option>
+        <option value="1.3">Mega STAB</option>
+      </select>
+
+      <div v-for="raidlevel in PokeRaid">
+
+      </div>
+
+      
+
+      <br>
+      <button type="button" v-if="SelectedMove != 0" @click="CalculateRaids()">
+        Calculate breakpoints
+      </button><br>
+      <span>
+        Selected: {{ SelectedPokemon}} <br>
+        Stats: {{ SelectedPokemonStats }} <br>
+        FastMove: {{SelectedFastMove}} <br>
+        <br>
+        Breakpoint in raids reached: {{RaidCounter.breakpoint}} / {{RaidCounter.raids}}<br>
+        Breakpoint in raids with se-damage reached: {{RaidCounter.breakpoint_se}} / {{RaidCounter.raids_se}}<br>
+      </span><br>
+      <table border="1" v-if="RaidResults.length > 0">
+        <tr>
+          <th>Name</th>
+          <th>Form</th>
+          <th>Damage</th>
+          <th>Damage_15IV</th>
+          <th>Last breakpoint?</th>
+        </tr>
+        <tr v-for="raid in RaidResults">
+          <td>{{raid.name}} </td>
+          <td>{{raid.form}}</td>
+          <td>{{raid.damage}}</td>
+          <td>{{raid.damage_15}}</td>
+          <td>{{raid.breakpoint}}</td>
+        </tr>
+      </table>
+      <span>
+        Most of the data was acquired using <a href="https://pogoapi.net/">pogoapi.net</a> and just sightly modified to use it. The mechanics were looked up at <a href="https://gamepress.gg/pokemongo/damage-mechanics">Gamepress.gg</a>.
+      </span>
+    </div>
+
+	<script>
+		Vue.component('v-select', VueSelect.VueSelect)
+
+	
+	new Vue({
+	  el: '#app',
+	  data: {
+		Pokemons: Object.values(pokemon_names[0]),
+    PokeStats: pokemon_stats,
+    PokeMoves: pokemon_moves,
+    PokeFS:  pokemon_friendship,
+    PokeWeather: pokemon_weather,
+    PokeCPM: pokemon_cpm,
+    PokeTypes: pokemon_types,
+    PokeRaid: pokemon_raidbosses["previous"],
+    PokeFastMoves: pokemon_fastmoves,
+    PokeTE: pokemon_te,
+		SelectedPokemon: 0,
+    SelectedPokemonStats: 0,
+    SelectedForm: 0,
+    SelectedFastMove: 0,
+    SelectedMove: 0,
+    SelectedFriendship: 1.0,
+    Weather: 1.0,
+    MaxLevel: 40,
+    Levels: [40,41,50,51],
+    AttackIV: 10,
+    ShadowAttackbonus: 1,
+    STAB: 1,
+    Megabonus: 1,
+    RaidResults: [],
+    RaidCounter: {"raids": 0, "breakpoint": 0, "raids_se": 0, "breakpoint_se": 0}
+    },
+    methods: {
+      CalculateRaids : function(){
+        this.RaidResults = []
+        this.RaidCounter = {"raids": 0, "breakpoint": 0, "raids_se": 0, "breakpoint_se": 0}
+        var cpm = this.PokeCPM.filter(cpm => cpm.level == this.MaxLevel)[0].multiplier
+        var fixed_multi = 1/2 * this.SelectedFastMove.power * this.SelectedFriendship * this.STAB * this.ShadowAttackbonus * this.Megabonus
+        var atk_iv_stat = cpm * (this.SelectedPokemonStats.base_attack + this.AttackIV)
+        var atk_15_stat = cpm * (this.SelectedPokemonStats.base_attack + 15)
+
+        for(key in this.PokeRaid[5]){
+          var cpmr = 0.79
+          var raidboss = this.PokeRaid[5][key]
+          var def = cpmr * (15 + this.PokeStats.filter(pokemon => pokemon.pokemon_id == raidboss.id && pokemon.form == raidboss.form)[0].base_defense)
+          var se = 1.0
+          for(i in raidboss.type){
+            se *= this.PokeTE[this.SelectedFastMove.type][raidboss.type[i]]
+          }
+
+          var damage_iv = 1 + Math.floor(fixed_multi * atk_iv_stat * se / def)
+          var damage_15 = 1 + Math.floor(fixed_multi * atk_15_stat * se / def)
+
+          this.RaidCounter.raids += 1
+          if(damage_iv == damage_15)
+            this.RaidCounter.breakpoint += 1
+          if(se > 1){
+            this.RaidCounter.raids_se += 1
+            if(damage_iv == damage_15)
+              this.RaidCounter.breakpoint_se += 1
+          }
+
+
+          var result = {"name" : raidboss.name, "form" : raidboss.form, "damage" : damage_iv, "damage_15": damage_15, "breakpoint" : damage_iv == damage_15}
+          this.RaidResults.push(result)
+        }
+      }
+    },
+    watch: {
+      'SelectedPokemon' : function(val, preVal) {
+        var forms = this.PokeStats.filter(pokemon => pokemon.pokemon_id == this.SelectedPokemon.id)
+        if(forms.filter(form => form.form == this.SelectedForm).length == 0){
+          this.SelectedForm = forms[0].form
+        }
+      },
+      'SelectedForm' : function(val, preVal) {
+        if(this.SelectedForm == "Shadow")
+          this.ShadowAttackbonus = 1.2
+        else
+          this.ShadowAttackbonus = 1
+        this.SelectedPokemonStats = this.PokeStats.filter(pokemon => pokemon.pokemon_id == this.SelectedPokemon.id && pokemon.form == this.SelectedForm)[0]
+      },
+      'SelectedMove' : function(val, preVal) {
+        var types = this.PokeTypes.filter(pokemon => pokemon.pokemon_id == this.SelectedPokemon.id && pokemon.form == this.SelectedForm)[0].type
+        this.SelectedFastMove = this.PokeFastMoves.filter(move => move.name == this.SelectedMove)[0]
+        var stab = 1
+        for(key in types){
+          if(types[key] == this.SelectedFastMove.type)
+            stab = 1.3
+        }
+        this.STAB = stab
+      }
+    },
+    computed: {
+      
+    }
+  })
+	
+		</script>
+  </body>
+
+</html>
